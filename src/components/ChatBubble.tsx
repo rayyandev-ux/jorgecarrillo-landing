@@ -4,10 +4,9 @@ import clsx from 'clsx';
 
 interface ChatBubbleProps {
   message: Message;
-  isLast?: boolean;
 }
 
-export const ChatBubble = ({ message, isLast }: ChatBubbleProps) => {
+export const ChatBubble = ({ message }: ChatBubbleProps) => {
   const isBot = message.type === 'bot';
 
   return (

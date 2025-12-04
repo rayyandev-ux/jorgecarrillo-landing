@@ -5,12 +5,11 @@ import { ChatBubble } from './components/ChatBubble';
 import { TypingIndicator } from './components/TypingIndicator';
 import { SCRIPT } from './data/script';
 import type { Message, UserData, Option } from './types';
-import clsx from 'clsx';
 
 // CONFIGURATION
 const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://your-n8n-webhook-url.com/webhook/path';
-const TYPING_DELAY_MS = 1000;
-const MESSAGE_DELAY_MS = 600;
+const TYPING_DELAY_MS = 1300;
+const MESSAGE_DELAY_MS = 900;
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,6 +19,8 @@ function App() {
   const [showInput, setShowInput] = useState(false);
   const [inputText, setInputText] = useState('');
   const [completed, setCompleted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -66,6 +67,8 @@ function App() {
 
       if (!isMounted) return;
       setShowInput(true);
+      setIsProcessing(false);
+      isProcessingRef.current = false;
     };
 
     processMessages();
@@ -74,7 +77,9 @@ function App() {
   }, [currentStepIndex, completed]);
 
   const handleOptionSelect = (option: Option) => {
-    if (!showInput) return;
+    if (!showInput || isProcessing || isProcessingRef.current) return;
+    setIsProcessing(true);
+    isProcessingRef.current = true;
 
     // Add user message
     const userMsg: Message = {
@@ -99,7 +104,30 @@ function App() {
 
   const handleTextSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputText.trim() || !showInput) return;
+    if (!inputText.trim() || !showInput || isProcessing || isProcessingRef.current) return;
+
+    // Phone validation
+    if (currentStep.type === 'tel') {
+       const phoneRegex = /^[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4,6}$/;
+       // Simple regex: allows +1234567890, (123) 456-7890, 123-456-7890, etc.
+       // Adjust length as needed, typically > 7 digits
+       const cleanNumber = inputText.replace(/\D/g, '');
+       
+       if (cleanNumber.length < 7 || !phoneRegex.test(inputText.replace(/\s/g, ''))) {
+          // Invalid phone
+          const errorMsg: Message = {
+             id: `error-${Date.now()}`,
+             type: 'bot',
+             content: "Eso no parece un número de teléfono válido. Por favor, intenta de nuevo (ej: 999123456).",
+             timestamp: Date.now()
+          };
+          setMessages(prev => [...prev, errorMsg]);
+          return;
+       }
+    }
+
+    setIsProcessing(true);
+    isProcessingRef.current = true;
 
     // Add user message
     const userMsg: Message = {
@@ -196,29 +224,12 @@ function App() {
       {/* Chat Container */}
       <div className="relative z-10 w-full max-w-2xl h-full flex flex-col bg-transparent md:bg-slate-950/30 md:backdrop-blur-md md:border-x md:border-white/10 shadow-2xl">
         
-        {/* Header */}
-        <div className="fixed top-0 left-0 right-0 z-20 flex items-center p-4 border-b border-white/10 bg-slate-900/80 backdrop-blur-md w-full max-w-2xl mx-auto">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-green-500">
-              <img 
-                src="/profile.jpg" 
-                onError={(e) => e.currentTarget.src = "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=150&h=150&fit=crop&crop=faces"}
-                alt="Coach" 
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
-          </div>
-          <div className="ml-3">
-            <h1 className="text-white font-semibold text-lg">Jorge Carrillo</h1>
-            <p className="text-green-400 text-xs font-medium">En línea</p>
-          </div>
-        </div>
+        {/* Header Removed */}
 
         {/* Messages Area */}
         <div 
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-4 pt-24 scroll-smooth no-scrollbar"
+          className="flex-1 overflow-y-auto p-4 pt-20 md:pt-24 scroll-smooth no-scrollbar"
         >
           <div className="flex flex-col space-y-2 min-h-full pb-4">
             {messages.map((msg) => (
@@ -242,7 +253,7 @@ function App() {
                     <button
                       key={opt.value}
                       onClick={() => handleOptionSelect(opt)}
-                      className="w-full p-4 text-sm md:text-base bg-gradient-to-r from-slate-800 to-slate-700 hover:from-blue-600 hover:to-blue-500 border border-slate-600 hover:border-blue-400 text-white rounded-2xl transition-all duration-300 shadow-lg hover:shadow-blue-500/20 text-left flex items-center justify-between group transform hover:-translate-y-0.5"
+                      className="w-full p-4 text-sm md:text-base bg-gradient-to-r from-slate-800 to-slate-700 hover:from-amber-600 hover:to-amber-500 active:from-amber-600 active:to-amber-500 border border-slate-600 hover:border-amber-400 active:border-amber-400 text-white rounded-2xl transition-all duration-300 shadow-lg hover:shadow-amber-500/20 active:shadow-amber-500/20 text-left flex items-center justify-between group transform hover:-translate-y-0.5 active:-translate-y-0.5"
                     >
                       <span className="font-medium">{opt.label}</span>
                       <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-white transition-colors" />
@@ -257,7 +268,7 @@ function App() {
         </div>
 
         {/* Input Area */}
-        <div className="shrink-0 bg-slate-900/90 backdrop-blur-lg transition-all duration-300 ease-in-out">
+        <div className="shrink-0 bg-slate-900/90 backdrop-blur-lg transition-all duration-300 ease-in-out pb-[env(safe-area-inset-bottom)]">
           <AnimatePresence mode="wait">
             {/* Options moved inline, removed from here */}
 
